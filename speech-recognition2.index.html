@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Google Cloud Speech Recognition</title>
+  <script>
+
+    const API_KEY = "AIzaSyD3y2Bi4IvermBxUvUjXQGIhetkiPjVHzI";
+
+    function startRecording() {
+
+      document.getElementById('status').textContent = "Listening...";
+
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(function(stream) {
+
+          const mediaRecorder = new MediaRecorder(stream);
+          const audioChunks = [];
+          
+          mediaRecorder.start();
+
+          mediaRecorder.addEventListener("dataavailable", event => {
+            audioChunks.push(event.data);
+          });
+
+          setTimeout(() => {
+            mediaRecorder.stop();
+          }, 5000);
+
+          mediaRecorder.addEventListener("stop", () => {
+
+            const audioBlob = new Blob(audioChunks);
+            const reader = new FileReader();
+            
+            reader.readAsDataURL(audioBlob);
+            reader.onloadend = function() {
+              const base64data = reader.result.split(',')[1];
+
+              document.getElementById('status').textContent = "Processing...";
+
+              fetch(`https://speech.googleapis.com/v1/speech:recognize?key=${API_KEY}`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  config: {
+                    languageCode: 'it-IT',
+                    model: 'default'
+                  },
+                  audio: {
+                    content: base64data
+                  }
+                })
+              })
+              .then(response => response.json())
+              .then(data => {
+
+                let transcript = "";
+                if (data.results && data.results.length > 0) {
+                  transcript = data.results[0].alternatives[0].transcript;
+                }
+                
+                window.parent.postMessage(transcript, '*');
+
+                document.getElementById('status').textContent = "Done! You said: " + transcript;
+              })
+              .catch(error => {
+                console.error('Error:', error);
+                window.parent.postMessage("ERROR", '*');
+                document.getElementById('status').textContent = "Error processing speech";
+              });
+            };
+          });
+        })
+        .catch(function(err) {
+          console.error('Error getting microphone:', err);
+          document.getElementById('status').textContent = "Error accessing microphone";
+          window.parent.postMessage("ERROR: Microphone access denied", '*');
+        });
+    }
+    
+    window.onload = startRecording;
+  </script>
+</head>
+<body style="font-family: Arial, sans-serif; text-align: center; padding: 20px;">
+  <h1>Italian Speech Recognition</h1>
+  <p id="status">Starting...</p>
+</body>
+</html>
